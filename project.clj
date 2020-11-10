@@ -4,6 +4,7 @@
   :scm {:name "git" :url "http://github.com/dynamic-notebook/functional-numerics"}
   :dependencies [[org.clojure/clojure "1.10.1" :scope "provided"]
                  [org.clojure/clojurescript "1.10.773" :scope "provided"]
+                 [net.littleredcomputer/sicmutils "0.13.0"]
                  [org.clojure/core.match "1.0.0"]]
   :profiles {:dev {:plugins [[lein-cljsbuild "1.1.8"
                               :exclusions [org.clojure/clojurescript]]

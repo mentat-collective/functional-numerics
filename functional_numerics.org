@@ -42,36 +42,39 @@ What we're trying to make.
             [sicmutils.numerical.quadrature.simpson38 :as simp38]
             [sicmutils.numerical.quadrature.trapezoid :as trap]
             [sicmutils.util :as u]))
+#+end_src
 
-;; ## Numerical Quadrature
-;;
-;; This namespace unites all of the work inside `sicmutils.numerical.quadrature`
-;; behind a single interface, fronted by the all-powerful `definite-integral`
-;; function.
-;;
-;; The interface takes `f`, an integrand, along with bounds `a` and `b`:
-;;
-;; (definite-integral f a b)
-;;
-;; Optionally, you can provide a dictionary of customizing options. These are
-;; passed down to whatever method you supply via the `:method` key.
-;;
-;; (definite-integral f a b opts)
-;;
-;;
-;; ## Implementation
-;;
-;; The keys in `quad-methods` below define the full range of integration methods
-;; available in the package. Each entry in this dictionary is either:
-;;
-;; - An 'integrator' function that matches the interface above for
-;;   `definite-integral` (possibly created with `qc/defintegrator`)
-;;
-;; - a dictionary of extra options. This must contain a `:method` key.
-;;
-;; This latter style is used when the method itself is a specialization of a
-;; more general method.
+This namespace unites all of the work inside `sicmutils.numerical.quadrature`
+behind a single interface, fronted by the all-powerful `definite-integral`
+function.
 
+The interface takes `f`, an integrand, along with bounds `a` and `b`:
+
+#+begin_src clojure
+(definite-integral f a b)
+#+end_src
+
+Optionally, you can provide a dictionary of customizing options. These are
+passed down to whatever method you supply via the `:method` key.
+
+#+begin_src clojure
+(definite-integral f a b opts)
+#+end_src
+
+**** Implementation
+
+The keys in `quad-methods` below define the full range of integration methods
+available in the package. Each entry in this dictionary is either:
+
+- An 'integrator' function that matches the interface above for
+  `definite-integral` (possibly created with `qc/defintegrator`)
+
+- a dictionary of extra options. This must contain a `:method` key.
+
+This latter style is used when the method itself is a specialization of a
+more general method.
+
+#+begin_src clojure
 (def ^:private quadrature-methods
   {:open                    {:method :adaptive-bulirsch-stoer
                              :interval qc/open}
@@ -99,16 +102,18 @@ What we're trying to make.
 
 (def available-methods
   (into #{} (keys quadrature-methods)))
+#+end_src
 
-;; The user can specify a method by providing the `:method` key in their options
-;; with:
-;;
-;; - a key in the above dictionary
-;; - another dict
-;; - a custom integration function
-;;
-;; The latter two are the allowed value types in `quadrature-methods`.
+The user can specify a method by providing the `:method` key in their options
+with:
 
+- a key in the above dictionary
+- another dict
+- a custom integration function
+
+The latter two are the allowed value types in `quadrature-methods`.
+
+#+begin_src clojure
 (defn- extract-method
   "Attempts to turn the supplied argument into an integration method; returns nil
   if method doesn't exist."
@@ -124,7 +129,9 @@ What we're trying to make.
         (let [[f m] (extract-method
                      (:method method))]
           [f (merge (dissoc method :method) m)])))
+#+end_src
 
+#+begin_src clojure
 (defn get-integrator
   "Takes:
 
@@ -153,13 +160,15 @@ What we're trying to make.
                        (qi/improper integrate)
                        integrate)]
        [integrate (dissoc (merge opts m) :method)]))))
+#+end_src
 
-;; ## Final API
-;;
-;; Here we are! The one function you need care about if you're interested in
-;; definite integrals. Learn to use this, and then dig in to the details of
-;; individual methods if you run inton trouble or want to learn more. Enjoy!
+**** Final API
 
+Here we are! The one function you need care about if you're interested in
+definite integrals. Learn to use this, and then dig in to the details of
+individual methods if you run inton trouble or want to learn more. Enjoy!
+
+#+begin_src clojure
 (defn definite-integral
   "Evaluates the definite integral of integrand `f` across the interval $a, b$.
   Optionally accepts a dictionary `opts` of customizing options; All `opts` will
@@ -201,12 +210,19 @@ What we're trying to make.
      (u/illegal (str "Unknown method: " method
                      ". Try one of: "
                      available-methods)))))
-
 #+end_src
 
 ** Basics
 
 *** Riemann Sums
+:PROPERTIES:
+:header-args+: :comments org :results value verbatim
+:END:
+
+#+begin_src clojure :tangle deps.edn :exports none :eval no
+{:deps
+ {net.littleredcomputer/sicmutils {:mvn/version "0.13.0"}}}
+#+end_src
 
 #+begin_src clojure
 (ns sicmutils.numerical.quadrature.riemann
@@ -218,60 +234,61 @@ What we're trying to make.
             [sicmutils.util.aggregate :as ua]
             [sicmutils.util.stream :as us]
             [sicmutils.numsymb]))
+#+end_src
 
-;; Riemann Quadrature
-;;
-;; This namespace includes functions for calculating the Riemann integral of a
-;; single-variable function. These are probably /not/ methods that you'll want
-;; to use; see the documentation and defaults in
-;; `sicmutils.numerical.quadrature` for good recommendations. But they're clear
-;; and understandable. The goal of this namespace is to lay the groundwork for
-;; visualizable routines that you can use to step toward understanding of the
-;; tougher methods.
-;;
-;; ["Quadrature"](https://en.wikipedia.org/wiki/Numerical_integration), in this
-;; context, means "numerical integration". The word is a historical term for
-;; calculating the area inside of some geometry shape. [Riemann
-;; sums](https://en.wikipedia.org/wiki/Riemann_sum) are a group of methods for
-;; numerical integration that use this strategy:
-;;
-;; - partition the area under the curve of some function $f$ into $n$ "slices"
-;; - generate some area estimate for each slice
-;; - add up all of the slices to form an estimate of the integral
-;; - increase the number of slices, and stop when the estimate stops changing.
-;;
-;; The Riemann integral of a function $f$ is the limit of this process as $n \to
-;; \infty$.
-;;
-;; How do you estimate the area of a slice? All of these methods estimate the
-;; area by forming a rectangle. For the base, use $x_r - x_l$. For the height,
-;; you might use:
-;;
-;; - the function value at the left point, $f(x_l)$ (Left Riemann sum)
-;; - the right point, $f(x_r)$ (Right Riemann sum)
-;; - the max of either $max(f(x_l), f(x_r))$ ("upper" Riemann sum)
-;; - the minimum, $min(f(x_l), f(x_r))$, called the "lower" Riemann sums
-;; - the function value at the midpoint: $f({{x_l + x_r} \over 2})$
-;;
-;; This namespace builds up to implementations for `left-integral`,
-;; `right-integral`, `upper-integral` and `lower-integral`. `midpoint.cljc`
-;; holds an implementation of the Midpoint method.
-;;
-;; A closely related method involves forming a trapezoid for each slice. This is
-;; equivalent to averaging the left and right Riemann sums. The trapezoid method
-;; lives in `trapezoid.cljc`.
-;;
-;; ## Riemann Sum Implementation
-;;
-;; We'll start with an inefficient-but-easily-understandable version of these
-;; methods. To form a Riemann sum we need to:
-;;
-;; - partition some range $[a, b]$ into `n` slices
-;; - call some area-generating function on each slice
-;;-  add all of the resulting area estimates together
-;;
-;; `windowed-sum` implements this pattern:
 
+This namespace includes functions for calculating the Riemann integral of a
+single-variable function. These are probably /not/ methods that you'll want
+to use; see the documentation and defaults in
+`sicmutils.numerical.quadrature` for good recommendations. But they're clear
+and understandable. The goal of this namespace is to lay the groundwork for
+visualizable routines that you can use to step toward understanding of the
+tougher methods.
+
+["Quadrature"](https://en.wikipedia.org/wiki/Numerical_integration), in this
+context, means "numerical integration". The word is a historical term for
+calculating the area inside of some geometry shape. [Riemann
+sums](https://en.wikipedia.org/wiki/Riemann_sum) are a group of methods for
+numerical integration that use this strategy:
+
+- partition the area under the curve of some function $f$ into $n$ "slices"
+- generate some area estimate for each slice
+- add up all of the slices to form an estimate of the integral
+- increase the number of slices, and stop when the estimate stops changing.
+
+The Riemann integral of a function $f$ is the limit of this process as $n \to
+\infty$.
+
+How do you estimate the area of a slice? All of these methods estimate the
+area by forming a rectangle. For the base, use $x_r - x_l$. For the height,
+you might use:
+
+- the function value at the left point, $f(x_l)$ (Left Riemann sum)
+- the right point, $f(x_r)$ (Right Riemann sum)
+- the max of either $max(f(x_l), f(x_r))$ ("upper" Riemann sum)
+- the minimum, $min(f(x_l), f(x_r))$, called the "lower" Riemann sums
+- the function value at the midpoint: $f({{x_l + x_r} \over 2})$
+
+This namespace builds up to implementations for `left-integral`,
+`right-integral`, `upper-integral` and `lower-integral`. `midpoint.cljc`
+holds an implementation of the Midpoint method.
+
+A closely related method involves forming a trapezoid for each slice. This is
+equivalent to averaging the left and right Riemann sums. The trapezoid method
+lives in `trapezoid.cljc`.
+
+**** Riemann Sum Implementation
+
+We'll start with an inefficient-but-easily-understandable version of these
+methods. To form a Riemann sum we need to:
+
+- partition some range $[a, b]$ into `n` slices
+- call some area-generating function on each slice
+-  add all of the resulting area estimates together
+
+`windowed-sum` implements this pattern:
+
+#+begin_src clojure
 (defn windowed-sum
   "Takes:
 
@@ -290,40 +307,47 @@ What we're trying to make.
           grid-points (concat (range a b width) [b])]
       (ua/sum
        (map area-fn grid-points (rest grid-points))))))
+#+end_src
+#+begin_src clojure
+Test this out with a function that returns `2` for every slice, and we get
+back an estimate (from the function returned by `windowed-sum`) of 2x the
+number of slices:
 
-;; Test this out with a function that returns `2` for every slice, and we get
-;; back an estimate (from the function returned by `windowed-sum`) of 2x the
-;; number of slices:
+#+end_src
 
+#+begin_src clojure
 #_
 (let [area-fn   (fn [l r] 2)
       estimator (windowed-sum area-fn 0 10)]
   (and (= 20.0 (estimator 10))
        (= 40.0 (estimator 20))))
-;; => true
+#+end_src
 
-;; Now, let's implement the four classic ["Riemann
-;; Integral"](https://en.wikipedia.org/wiki/Riemann_integral) methods.
-;;
-;; Let's say we want to integrate a function $f$. The left and right Riemann
-;; sums estimate a slice's area as a rectangle with:
-;;
-;; - width == $x_r - x_l$, and
-;; - height == $f(x_l)$ or $f(x_r)$, respectively.
-;;
-;; `left-sum` is simple to implement, given `windowed-sum`:
+Now, let's implement the four classic ["Riemann
+Integral"](https://en.wikipedia.org/wiki/Riemann_integral) methods.
 
+Let's say we want to integrate a function $f$. The left and right Riemann
+sums estimate a slice's area as a rectangle with:
+
+- width == $x_r - x_l$, and
+- height == $f(x_l)$ or $f(x_r)$, respectively.
+
+`left-sum` is simple to implement, given `windowed-sum`:
+
+#+begin_src clojure
 (defn- left-sum* [f a b]
   (-> (fn [l r] (* (f l) (- r l)))
       (windowed-sum a b)))
+#+end_src
 
-;; Every internal slice has the same width, so we can make the sum slightly more
-;; efficient by pulling out the constant and multiplying by it a single time.
-;;
-;; Internally, we also generate all of the internal "left" points directly from
-;; the slice index, instead of pre-partitioning the range. This is fine since we
-;; don't need $x_r$.
+Every internal slice has the same width, so we can make the sum slightly more
+efficient by pulling out the constant and multiplying by it a single time.
 
+Internally, we also generate all of the internal "left" points directly from
+the slice index, instead of pre-partitioning the range. This is fine since we
+don't need $x_r$.
+
+#+begin_src clojure
 (defn- left-sum
   "Returns a function of `n`, some number of slices of the total integration
   range, that returns an estimate for the definite integral of $f$ over the
@@ -334,19 +358,23 @@ What we're trying to make.
       (let [h  (/ width n)
             fx (fn [i] (f (+ a (* i h))))]
         (* h (ua/sum fx 0 n))))))
+#+end_src
 
-;; `right-sum` is almost identical, except that it uses $f(x_r)$ as the
-;; estimate of each rectangle's height:
+`right-sum` is almost identical, except that it uses $f(x_r)$ as the estimate of
+each rectangle's height:
 
+#+begin_src clojure
 (defn- right-sum* [f a b]
   (-> (fn [l r] (* (f r) (- r l)))
       (windowed-sum a b)))
+#+end_src
 
-;; Same trick here to get a more efficient version. This implementation also
-;; generates an internal function `fx` of the window index. The only difference
-;; from the `left-sum` implementation is an initial offset of `h`, pushing every
-;; point to the right side of the window.
+Same trick here to get a more efficient version. This implementation also
+generates an internal function `fx` of the window index. The only difference
+from the `left-sum` implementation is an initial offset of `h`, pushing every
+point to the right side of the window.
 
+#+begin_src clojure
 (defn- right-sum
   "Returns a function of `n`, some number of slices of the total integration
   range, that returns an estimate for the definite integral of $f$ over the
@@ -358,10 +386,12 @@ What we're trying to make.
             start (+ a h)
             fx    (fn [i] (f (+ start (* i h))))]
         (* h (ua/sum fx 0 n))))))
+#+end_src
 
-;; The upper Riemann sum generates a slice estimate by taking the maximum of
-;; $f(x_l)$ and $f(x_r)$:
+The upper Riemann sum generates a slice estimate by taking the maximum of
+$f(x_l)$ and $f(x_r)$:
 
+#+begin_src clojure
 (defn- upper-sum
   "Returns an estimate for the definite integral of $f$ over the range $[a, b]$
   using an upper Riemann sum.
@@ -373,9 +403,11 @@ What we're trying to make.
   (-> (fn [l r] (* (- r l)
                   (max (f l) (f r))))
       (windowed-sum a b)))
+#+end_src
 
-;; Similarly, the lower Riemann sum uses the /minimum/ of $f(x_l)$ and $f(x_r)$:
+Similarly, the lower Riemann sum uses the /minimum/ of $f(x_l)$ and $f(x_r)$:
 
+#+begin_src clojure
 (defn- lower-sum
   "Returns an estimate for the definite integral of $f$ over the range $[a, b]$
   using a lower Riemann sum.
@@ -387,19 +419,21 @@ What we're trying to make.
   (-> (fn [l r] (* (- r l)
                   (min (f l) (f r))))
       (windowed-sum a b)))
+#+end_src
 
-;; ## Estimating Integrals with Riemann Sums
-;;
-;; Given the tools above, let's attempt to estimate the integral of $f(x) = x^2$
-;; using the left and right Riemann sum methods. (The actual equation for the
-;; integral is $x^3 \over 3$).
-;;
-;; The functions above return functions of `n`, the number of slices. We can
-;; use `(us/powers 2)` to return a sequence of `(1, 2, 4, 8, ...)` and map the
-;; function of `n` across this sequence to obtain successively better estimates
-;; for $\int_0^{10} x^2$. The true value is $10^3 \over 3 = 333.333...$:
+**** Estimating Integrals with Riemann Sums
 
-#_
+Given the tools above, let's attempt to estimate the integral of $f(x) = x^2$
+using the left and right Riemann sum methods. (The actual equation for the
+integral is $x^3 \over 3$).
+
+The functions above return functions of `n`, the number of slices. We can
+use `(us/powers 2)` to return a sequence of `(1, 2, 4, 8, ...)` and map the
+function of `n` across this sequence to obtain successively better estimates
+for $\int_0^{10} x^2$. The true value is $10^3 \over 3 = 333.333...$:
+
+
+#+begin_src clojure
 (let [f              (fn [x] (* x x))
       left-estimates  (map (left-sum f 0 10)
                            (us/powers 2))
@@ -410,12 +444,13 @@ What we're trying to make.
 
        (= [1000.0 625.0 468.75 398.4375 365.234375]
           (take 5 right-estimates))))
+#+end_src
 
-;; Both estimates are bad at 32 slices and don't seem to be getting better. Even
-;; up to $2^16 = 65,536$ slices we haven't converged, and are still far from the
-;; true estimate:
+Both estimates are bad at 32 slices and don't seem to be getting better. Even up
+to $2^16 = 65,536$ slices we haven't converged, and are still far from the true
+estimate:
 
-#_
+#+begin_src clojure
 (= {:converged? false
     :terms-checked 16
     :result 333.31807469949126}
@@ -423,32 +458,33 @@ What we're trying to make.
      (-> (map (left-sum f 0 10)
               (us/powers 2))
          (us/seq-limit {:maxterms 16}))))
+#+end_src
 
-;; This bad convergence behavior is why common wisdom states that you should
-;; never use left and right Riemann sums for real work.
-;;
-;; But maybe we can do better.
-;;
-;;
-;; ## Sequence Acceleration
-;;
-;; One answer to this problem is to use "sequence acceleration" via Richardson
-;; extrapolation, as described in `richardson.cljc`.
-;;
-;; `ir/richardson-sequence` takes a sequence of estimates of some function
-;; and "accelerates" the sequence by combining successive estimates.
-;;
-;; The estimates have to be functions of some parameter $n$ that decreases by a
-;; factor of $t$ for each new element. In the example above, $n$ doubles each
-;; time; this is equivalent to thinking about the window width $h$ halving each
-;; time, so $t = 2$.
-;;
-;; This library's functional style lets us accelerate a sequence of estimates
-;; `xs` by simply wrapping it in a call to `(ir/richardson-sequence xs 2)`.
-;; Amazing!
-;;
-;; Does Richardson extrapolation help?
+This bad convergence behavior is why common wisdom states that you should never
+use left and right Riemann sums for real work.
 
+But maybe we can do better.
+
+**** Sequence Acceleration
+
+One answer to this problem is to use "sequence acceleration" via Richardson
+extrapolation, as described in `richardson.cljc`.
+
+`ir/richardson-sequence` takes a sequence of estimates of some function
+and "accelerates" the sequence by combining successive estimates.
+
+The estimates have to be functions of some parameter $n$ that decreases by a
+factor of $t$ for each new element. In the example above, $n$ doubles each
+time; this is equivalent to thinking about the window width $h$ halving each
+time, so $t = 2$.
+
+This library's functional style lets us accelerate a sequence of estimates
+`xs` by simply wrapping it in a call to `(ir/richardson-sequence xs 2)`.
+Amazing!
+
+Does Richardson extrapolation help?
+
+#+begin_src clojure
 #_
 (= {:converged? true
     :terms-checked 4
@@ -459,26 +495,29 @@ What we're trying to make.
               (us/powers 2))
          (ir/richardson-sequence 2)
          (us/seq-limit))))
+#+end_src
 
-;; We now converge to the actual, true value of the integral in 4 terms!
-;;
-;; This is going to be useful for each of our Riemann sums, so let's make a
-;; function that can accelerate a generic sequence of estimates. The following
-;; function takes:
-;;
-;; - the sequence of estimates, `estimate-seq`
-;; - a dictionary of "options"
-;;
-;; This library is going to adopt an interface that allows the user to configure
-;; a potentially very complex integration function by sending a single
-;; dictionary of options down to each of its layers. Adopting that style now is
-;; going to allow this function to grow to accomodate other methods of sequence
-;; acceleration, like polynomial or rational function extrapolation.
-;;
-;; For now, `{:accelerate? true}` configures Richardson extrapolation iff the
-;; user hasn't specified a custom sequence of integration slices using the `:n`
-;; option.
+We now converge to the actual, true value of the integral in 4 terms!
 
+This is going to be useful for each of our Riemann sums, so let's make a
+function that can accelerate a generic sequence of estimates. The following
+function takes:
+
+- the sequence of estimates, `estimate-seq`
+- a dictionary of "options"
+
+This library is going to adopt an interface that allows the user to configure
+a potentially very complex integration function by sending a single
+dictionary of options down to each of its layers. Adopting that style now is
+going to allow this function to grow to accomodate other methods of sequence
+acceleration, like polynomial or rational function extrapolation.
+
+For now, `{:accelerate? true}` configures Richardson extrapolation iff the
+user hasn't specified a custom sequence of integration slices using the `:n`
+option.
+
+
+#+begin_src clojure
 (defn- accelerate
   "NOTE - this is only appropriate for Richardson-accelerating sequences with t=2,
   p=q=1.
@@ -488,10 +527,12 @@ What we're trying to make.
   (if (and accelerate? (number? n))
     (ir/richardson-sequence estimate-seq 2 1 1)
     estimate-seq))
+#+end_src
 
-;; Check that this works:
+Check that this works:
 
-#_
+
+#+begin_src clojure
 (= {:converged? true
     :terms-checked 4
     :result 333.3333333333333}
@@ -501,41 +542,43 @@ What we're trying to make.
               (us/powers 2))
          (accelerate {:accelerate? true})
          (us/seq-limit))))
+#+end_src
 
-;; Excellent!
-;;
-;; ## Incremental Computation
-;;
-;; The results look quite nice; but notice how much redundant computation we're
-;; doing.
-;;
-;; Consider the evaluation points of a left Riemann sum with 4 slices, next to a
-;; left sum with 8 slices:
-;;
-;; x---x---x---x----
-;; x-x-x-x-x-x-x-x--
-;;
-;; Every time we double our number of number of evaluations, half of the windows
-;; share a left endpoint. The same is true for a right sum:
-;;
-;; ----x---x---x---x
-;; --x-x-x-x-x-x-x-x
-;;
-;; In both cases, the new points are simply the /midpoints/ of the existing
-;; slices.
-;;
-;; This suggests a strategy for incrementally updating a left or right Riemann
-;; sum when doubling the number of points:
-;;
-;; - Generate a new midpoint estimate of each `n` slices
-;; - Add this estimate to the previous estimate
-;; - Divide the sum by `2` to scale each NEW slice width down by 2 (since we're
-;;   doubling the number of slices)
-;;
-;; First, implement `midpoint-sum`. This is very close to the implementation for
-;; `left-sum`; internally the function adds an offset of $h \over 2$ to each
-;; slice before sampling its function value.
+Excellent!
 
+## Incremental Computation
+
+The results look quite nice; but notice how much redundant computation we're
+doing.
+
+Consider the evaluation points of a left Riemann sum with 4 slices, next to a
+left sum with 8 slices:
+
+x---x---x---x----
+x-x-x-x-x-x-x-x--
+
+Every time we double our number of number of evaluations, half of the windows
+share a left endpoint. The same is true for a right sum:
+
+----x---x---x---x
+--x-x-x-x-x-x-x-x
+
+In both cases, the new points are simply the /midpoints/ of the existing
+slices.
+
+This suggests a strategy for incrementally updating a left or right Riemann
+sum when doubling the number of points:
+
+- Generate a new midpoint estimate of each `n` slices
+- Add this estimate to the previous estimate
+- Divide the sum by `2` to scale each NEW slice width down by 2 (since we're
+  doubling the number of slices)
+
+First, implement `midpoint-sum`. This is very close to the implementation for
+`left-sum`; internally the function adds an offset of $h \over 2$ to each
+slice before sampling its function value.
+
+#+begin_src clojure
 (defn midpoint-sum
   "Returns a function of `n`, some number of slices of the total integration
   range, that returns an estimate for the definite integral of $f$ over the
@@ -547,11 +590,13 @@ What we're trying to make.
             offset (+ a (/ h 2.0))
             fx     (fn [i] (f (+ offset (* i h))))]
         (* h (ua/sum fx 0 n))))))
+#+end_src
 
-;; The next function returns a function that can perform the incremental update
-;; to a left or right Riemann sum (and to a midpoint method estimate, as we'll
-;; see in `midpoint.cljc`):
+The next function returns a function that can perform the incremental update
+to a left or right Riemann sum (and to a midpoint method estimate, as we'll
+see in `midpoint.cljc`):
 
+#+begin_src clojure
 (defn Sn->S2n
   "Returns a function of:
 
@@ -566,42 +611,48 @@ What we're trying to make.
     (fn [Sn n]
       (-> (+ Sn (midpoints n))
           (/ 2.0)))))
+#+end_src
 
-;; After using `left-sum` to generate an initial estimate, we can use `Sn->S2n`
-;; to generate all successive estimates, as long as we always double our slices.
-;; This suggests a function that takes an initial number of slices, `n0`, and
-;; then uses `reductions` to scan across `(us/powers 2 n0)` with the function
-;; returned by `Sn->S2n`:
+After using `left-sum` to generate an initial estimate, we can use `Sn->S2n`
+to generate all successive estimates, as long as we always double our slices.
+This suggests a function that takes an initial number of slices, `n0`, and
+then uses `reductions` to scan across `(us/powers 2 n0)` with the function
+returned by `Sn->S2n`:
 
+#+begin_src clojure
 (defn- left-sequence* [f a b n0]
   (let [first-S ((left-sum f a b) n0)
         steps   (us/powers 2 n0)]
     (reductions (Sn->S2n f a b) first-S steps)))
+#+end_src
 
-;; Verify that this function returns an equivalent sequence of estimates to the
-;; non-incremental `left-sum`, when mapped across powers of 2:
+Verify that this function returns an equivalent sequence of estimates to the
+non-incremental `left-sum`, when mapped across powers of 2:
 
-#_
+
+#+begin_src clojure
 (let [f (fn [x] (* x x))]
   (= (take 10 (left-sequence* f 0 10 1))
      (take 10 (map (left-sum f 0 10)
                    (us/powers 2 1)))))
+#+end_src
 
-;; ## Generalizing the Incremental Approach
-;;
-;; We need to use the same style for `right-sum`, so let's try and extract the
-;; pattern above, of:
-;;
-;; - generating an initial estimate of `n0` slices using some function `S-fn`
-;; - refining an estimate of `n0` slices => `n0 / 2` slices using some
-;;   incremental updater, `next-S-fn`
-;;
-;; In fact, because methods like the Midpoint method from `midpoint.cljc` can
-;; only incrementally update from `n` => `n/3`, let's make the factor general
-;; too.
-;;
-;; `geometric-estimate-seq` captures the pattern above:
+**** Generalizing the Incremental Approach
 
+We need to use the same style for `right-sum`, so let's try and extract the
+pattern above, of:
+
+- generating an initial estimate of `n0` slices using some function `S-fn`
+- refining an estimate of `n0` slices => `n0 / 2` slices using some
+  incremental updater, `next-S-fn`
+
+In fact, because methods like the Midpoint method from `midpoint.cljc` can
+only incrementally update from `n` => `n/3`, let's make the factor general
+too.
+
+`geometric-estimate-seq` captures the pattern above:
+
+#+begin_src clojure
 (defn geometric-estimate-seq
   "Accepts:
 
@@ -616,9 +667,11 @@ What we're trying to make.
   (let [first-S (S-fn n0)
         steps   (us/powers factor n0)]
     (reductions next-S-fn first-S steps)))
+#+end_src
 
-;; And another version of `left-sequence`, implemented using the new function:
+And another version of `left-sequence`, implemented using the new function:
 
+#+begin_src clojure
 (defn left-sequence**
   "Returns a (lazy) sequence of successively refined estimates of the integral of
   `f` over the closed-open interval $a, b$ by taking left-Riemann sums with
@@ -632,33 +685,35 @@ What we're trying to make.
                            (Sn->S2n f a b)
                            2
                            n0)))
+#+end_src
 
-;; ## Incremental Updates with Any Sequence
-;;
-;; What if we want to combine the ability to reuse old results with the ability
-;; to take successively refined estimates that /don't/ look like geometric
-;; series? The series 1, 2, 3... of natural numbers is an obvious choice of
-;; windows... but only the even powers are able to reuse estimates.
-;;
-;; Integration methods like the Bulirsch-Stoer approach depend on sequences like
-;; 2, 3, 4, 6...
-;;
-;; We absolutely want to be able to save potentially-expensive function
-;; evaluations.
-;;
-;; One way to do this is to memoize the function `f` that you pass in to any of
-;; the methods above.
-;;
-;; Alternatively, we could implement a version of `geometric-estimate-seq` that
-;; takes /any/ sequence of estimate,s and maintains a sort of internal
-;; memoization cache.
-;;
-;; For every `n`, check the cache for `prev == n/factor`. If it exists in the
-;; cache, use `next-S-fn`; else, use `S-fn`, just like we did in
-;; `geometric-estimate-seq` for the initial value.
-;;
-;; `general-estimate-seq` does this:
+**** Incremental Updates with Any Sequence
 
+What if we want to combine the ability to reuse old results with the ability
+to take successively refined estimates that /don't/ look like geometric
+series? The series 1, 2, 3... of natural numbers is an obvious choice of
+windows... but only the even powers are able to reuse estimates.
+
+Integration methods like the Bulirsch-Stoer approach depend on sequences like
+2, 3, 4, 6...
+
+We absolutely want to be able to save potentially-expensive function
+evaluations.
+
+One way to do this is to memoize the function `f` that you pass in to any of
+the methods above.
+
+Alternatively, we could implement a version of `geometric-estimate-seq` that
+takes /any/ sequence of estimate,s and maintains a sort of internal
+memoization cache.
+
+For every `n`, check the cache for `prev == n/factor`. If it exists in the
+cache, use `next-S-fn`; else, use `S-fn`, just like we did in
+`geometric-estimate-seq` for the initial value.
+
+`general-estimate-seq` does this:
+
+#+begin_src clojure
 (defn- general-estimate-seq
   "Accepts:
 
@@ -683,15 +738,17 @@ What we're trying to make.
     (->> (reductions f [{} nil] n-seq)
          (map second)
          (rest))))
+#+end_src
 
-;; We can combine `general-estimate-seq` and `geometric-estimate-seq` into a
-;; final method that decides which implementation to call, based on the type of
-;; the `n0` argument.
-;;
-;; If it's a number, use it as the `n0` seed for a geometrically increasing
-;; series of estimates. Else, assume it's a sequence and pass it to
-;; `general-estimate-seq`.
+We can combine `general-estimate-seq` and `geometric-estimate-seq` into a
+final method that decides which implementation to call, based on the type of
+the `n0` argument.
 
+If it's a number, use it as the `n0` seed for a geometrically increasing
+series of estimates. Else, assume it's a sequence and pass it to
+`general-estimate-seq`.
+
+#+begin_src clojure
 (defn incrementalize
   "Function that generalizes the ability to create successively-refined estimates
   of an integral, given:
@@ -716,15 +773,17 @@ What we're trying to make.
             geometric-estimate-seq
             general-estimate-seq)]
     (f S-fn next-S-fn factor n)))
+#+end_src
 
-;; ## Final Incremental Implementations
-;;
-;; We can use `incrementalize` to write our final version of `left-sequence`,
-;; along with a matching version for `right-sequence`.
-;;
-;; Notice that we're using `accelerate` from above. The interface should make
-;; more sense now:
+**** Final Incremental Implementations
 
+We can use `incrementalize` to write our final version of `left-sequence`,
+along with a matching version for `right-sequence`.
+
+Notice that we're using `accelerate` from above. The interface should make
+more sense now:
+
+#+begin_src clojure
 (defn left-sequence
   "Returns a (lazy) sequence of successively refined estimates of the integral of
   `f` over the closed-open interval $a, b$ by taking left-Riemann sums.
@@ -746,7 +805,9 @@ What we're trying to make.
          next-S (Sn->S2n f a b)]
      (-> (incrementalize S next-S 2 (:n opts 1))
          (accelerate opts)))))
+#+end_src
 
+#+begin_src clojure
 (defn right-sequence
   "Returns a (lazy) sequence of successively refined estimates of the integral of
   `f` over the closed-open interval $a, b$ by taking right-Riemann sums.
@@ -768,11 +829,13 @@ What we're trying to make.
          next-S (Sn->S2n f a b)]
      (-> (incrementalize S next-S 2 (:n opts 1))
          (accelerate opts)))))
+#+end_src
 
-;; `lower-sequence` and `upper-sequence` are similar. They can't take advantage
-;; of any incremental speedup, so we generate a sequence of `n`s internally and
-;; map `lower-sum` and `upper-sum` directly across these.
+`lower-sequence` and `upper-sequence` are similar. They can't take advantage
+of any incremental speedup, so we generate a sequence of `n`s internally and
+map `lower-sum` and `upper-sum` directly across these.
 
+#+begin_src clojure
 (defn lower-sequence
   "Returns a (lazy) sequence of successively refined estimates of the integral of
   `f` over the closed interval $(a, b)$ by taking lower-Riemann sums.
@@ -795,7 +858,9 @@ What we're trying to make.
                  n)]
      (-> (map (lower-sum f a b) n-seq)
          (accelerate opts)))))
+#+end_src
 
+#+begin_src clojure
 (defn upper-sequence
   "Returns a (lazy) sequence of successively refined estimates of the integral of
   `f` over the closed interval $(a, b)$ by taking upper-Riemann sums.
@@ -818,43 +883,45 @@ What we're trying to make.
                  n)]
      (-> (map (upper-sum f a b) n-seq)
          (accelerate opts)))))
+#+end_src
 
-;; ## Integral API
-;;
-;; Finally, we expose four API methods for each of the {left, right, lower,
-;; upper}-Riemann sums.
-;;
-;; Each of these makes use a special `qc/defintegrator` "macro"; This style
-;; allows us to adopt one final improvement. If the interval $a, b$ is below
-;; some threshold, the integral API will take a single slice using the supplied
-;; `:area-fn` below and not attempt to converge. See `common.cljc` for more
-;; details.
-;;
-;; These API interfaces are necessarily limiting. They force the assumptions
-;; that you:
-;;
-;; - only want to use geometrical sequences that start with n0 = 1
-;; - only want to (optionally) accelerate using Richardson extrapolation
-;;
-;; I can imagine a better API, where it's much easier to configure generic
-;; sequence acceleration! This will almost certainly show up in the library at
-;; some point. For now, here are some notes:
-;;
-;; - Richardson extrapolation requires a geometric series of estimates. If you
-;;   want to use some /other/ geometry series with `left-sequence` or
-;;   `right-sequence`, you can still accelerate with Richardson. Just pass your
-;;   new factor as `t`.
-;;
-;; - For each of {left, right, lower, upper}-Riemann sums, the order of the
-;;   error terms is 1, 2, 3, 4..., so always provide `p=1` and `q=1` to
-;;   `richardson-sequence`. `accelerate` does this above.
-;;
-;; - If you want to use some NON-geometric seq, you'll need to use the methods
-;;   in `polynomial.cljc` and `rational.cljc`, which are more general forms of
-;;   sequence acceleration that use polynomial or rational function
-;;   extrapolation. Your sequence of `xs` for each of those methods should be
-;;   `n-seq`.
+**** Integral API
 
+Finally, we expose four API methods for each of the {left, right, lower,
+upper}-Riemann sums.
+
+Each of these makes use a special `qc/defintegrator` "macro"; This style
+allows us to adopt one final improvement. If the interval $a, b$ is below
+some threshold, the integral API will take a single slice using the supplied
+`:area-fn` below and not attempt to converge. See `common.cljc` for more
+details.
+
+These API interfaces are necessarily limiting. They force the assumptions
+that you:
+
+- only want to use geometrical sequences that start with n0 = 1
+- only want to (optionally) accelerate using Richardson extrapolation
+
+I can imagine a better API, where it's much easier to configure generic
+sequence acceleration! This will almost certainly show up in the library at
+some point. For now, here are some notes:
+
+- Richardson extrapolation requires a geometric series of estimates. If you
+  want to use some /other/ geometry series with `left-sequence` or
+  `right-sequence`, you can still accelerate with Richardson. Just pass your
+  new factor as `t`.
+
+- For each of {left, right, lower, upper}-Riemann sums, the order of the
+  error terms is 1, 2, 3, 4..., so always provide `p=1` and `q=1` to
+  `richardson-sequence`. `accelerate` does this above.
+
+- If you want to use some NON-geometric seq, you'll need to use the methods
+  in `polynomial.cljc` and `rational.cljc`, which are more general forms of
+  sequence acceleration that use polynomial or rational function
+  extrapolation. Your sequence of `xs` for each of those methods should be
+  `n-seq`.
+
+#+begin_src clojure
 (qc/defintegrator left-integral
   "Returns an estimate of the integral of `f` across the closed-open interval $a,
   b$ using a left-Riemann sum with $1, 2, 4 ... 2^n$ windows for each estimate.
@@ -866,7 +933,9 @@ What we're trying to make.
   customize this function's behavior."
   :area-fn (fn [f a b] (* (f a) (- b a)))
   :seq-fn left-sequence)
+#+end_src
 
+#+begin_src clojure
 (qc/defintegrator right-integral
   "Returns an estimate of the integral of `f` across the closed-open interval $a,
   b$ using a right-Riemann sum with $1, 2, 4 ... 2^n$ windows for each estimate.
@@ -878,12 +947,14 @@ What we're trying to make.
   customize this function's behavior."
   :area-fn (fn [f a b] (* (f b) (- b a)))
   :seq-fn right-sequence)
+#+end_src
 
-;; upper and lower Riemann sums have the same interface; internally, they're not
-;; able to take advantage of incremental summation, since it's not possible to
-;; know in advance whether or not the left or right side of the interval should
-;; get reused.
+upper and lower Riemann sums have the same interface; internally, they're not
+able to take advantage of incremental summation, since it's not possible to
+know in advance whether or not the left or right side of the interval should
+get reused.
 
+#+begin_src clojure
 (qc/defintegrator lower-integral
   "Returns an estimate of the integral of `f` across the closed-open interval $a,
   b$ using a lower-Riemann sum with $1, 2, 4 ... 2^n$ windows for each estimate.
@@ -895,7 +966,9 @@ What we're trying to make.
   customize this function's behavior."
   :area-fn (fn [f a b] (* (min (f a) (f b)) (- b a)))
   :seq-fn lower-sequence)
+#+end_src
 
+#+begin_src clojure
 (qc/defintegrator upper-integral
   "Returns an estimate of the integral of `f` across the closed-open interval $a,
   b$ using an upper-Riemann sum with $1, 2, 4 ... 2^n$ windows for each estimate.
@@ -907,15 +980,15 @@ What we're trying to make.
   customize this function's behavior."
   :area-fn (fn [f a b] (* (max (f a) (f b)) (- b a)))
   :seq-fn upper-sequence)
-
-;; ## Next Steps
-;;
-;; For a discussion and implementation of the more advanced methods (the
-;; workhorse methods that you should actually use!), see `midpoint.cljc` and
-;; `trapezoid.cljc`. The midpoint method is the standard choice for open
-;; intervals, where you can't evaluate the function at its endpoints. The
-;; trapezoid method is standard for closed intervals.
 #+end_src
+
+**** Next Steps
+
+For a discussion and implementation of the more advanced methods (the workhorse
+methods that you should actually use!), see `midpoint.cljc` and
+`trapezoid.cljc`. The midpoint method is the standard choice for open intervals,
+where you can't evaluate the function at its endpoints. The trapezoid method is
+standard for closed intervals.
 
 *** Midpoint Rule
 
