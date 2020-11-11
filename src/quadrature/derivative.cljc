@@ -5,7 +5,7 @@
             [sicmutils.function :as f]
             [sicmutils.generic :as g]
             [sicmutils.infix :as if]
-            [quadrature.util :as u]
+            [sicmutils.util :as u]
             [quadrature.util.stream :as us]
             [sicmutils.value :as v]))
 

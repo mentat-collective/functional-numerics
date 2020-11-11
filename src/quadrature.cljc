@@ -12,7 +12,7 @@
             [quadrature.simpson :as simp]
             [quadrature.simpson38 :as simp38]
             [quadrature.trapezoid :as trap]
-            [quadrature.util :as u]))
+            [sicmutils.util :as u]))
 
 (def ^:private quadrature-methods
   {:open                    {:method :adaptive-bulirsch-stoer
@@ -121,7 +121,7 @@
                 info? false}
            :as opts}]
    (if-let [[integrate m] (get-integrator method a b opts)]
-     (let [f      #?(:clj (if compile? (c/compile-univariate-function f) f)
+     (let [f      #?(:clj (if compile? (c/compile-univariate-fn f) f)
                      :cljs f)
            result (integrate f a b m)]
        (if info? result (:result result)))

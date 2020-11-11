@@ -6,7 +6,7 @@
             [quadrature.midpoint :as mid]
             [quadrature.trapezoid :as trap]
             [sicmutils.generic :as g]
-            [quadrature.util :as u]
+            [sicmutils.util :as u]
             [quadrature.util.stream :as us]))
 
 (def bulirsch-stoer-steps

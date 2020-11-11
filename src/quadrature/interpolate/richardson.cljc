@@ -4,7 +4,7 @@
   efficient calculation."
   (:require [quadrature.interpolate.polynomial :as ip]
             [sicmutils.generic :as g]
-            [quadrature.util :as u]
+            [sicmutils.util :as u]
             [quadrature.util.aggregate :as ua]
             [quadrature.util.stream :as us]
             [sicmutils.value :as v]))

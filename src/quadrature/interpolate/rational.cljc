@@ -70,7 +70,7 @@
 
   \"The Bulirsch-Stoer algorithm produces the so-called diagonal rational
   function, with the degrees of numerator and denominator equal (if m is even)
-  or with the degree of the denominator larger by one if m is odd.\" ~ Press,
+  or with the degree of the denominator larger by one if m is odd.\" ` Press,
   Numerical Recipes, p105
 
   The implementation follows Equation 3.2.3 on on page 105 of Press:

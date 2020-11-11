@@ -3,7 +3,7 @@
             [quadrature.common :as qc
              #?@(:cljs [:include-macros true])]
             [sicmutils.generic :as g]
-            [quadrature.util :as u]
+            [sicmutils.util :as u]
             [quadrature.util.aggregate :as ua]
             [quadrature.util.stream :as us]
             [sicmutils.numsymb]))
@@ -26,10 +26,6 @@
           grid-points (concat (range a b width) [b])]
       (ua/sum
        (map area-fn grid-points (rest grid-points))))))
-
-Test this out with a function that returns `2` for every slice, and we get
-back an estimate (from the function returned by `windowed-sum`) of 2x the
-number of slices:
 
 (defn- left-sum* [f a b]
   (-> (fn [l r] (* (f l) (- r l)))

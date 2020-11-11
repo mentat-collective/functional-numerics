@@ -4,7 +4,7 @@
              #?@(:cljs [:include-macros true])]
             [quadrature.riemann :as qr]
             [sicmutils.generic :as g]
-            [quadrature.util :as u]
+            [sicmutils.util :as u]
             [quadrature.util.aggregate :as ua]
             [quadrature.util.stream :as us]))
 
