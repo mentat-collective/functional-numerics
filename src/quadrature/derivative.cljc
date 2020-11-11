@@ -22,11 +22,6 @@
    (fn [h]
      (/ (- (f (+ x h)) fx) h))))
 
-(def ^:private fx-h :tangle no
-  (->> (d/taylor-series-terms func 'x (g/negate 'h))
-       (take 5)
-       (reduce g/+)))
-
 (defn backward-difference
   "Returns a single-variable function of a step size `h` that calculates the
   backward-difference estimate of the first derivative of `f` at point `x`:

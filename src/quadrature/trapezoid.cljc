@@ -7,6 +7,7 @@
             [sicmutils.function :as f]
             [sicmutils.generic :as g]
             [sicmutils.util :as u]
+            [sicmutils.simplify]
             [quadrature.util.aggregate :as ua]
             [quadrature.util.stream :as us]))
 
